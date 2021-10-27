@@ -1,8 +1,13 @@
 # Gcode-Object-Monitor
 
 ## Gcode file display program
-Gcode-Object-Monitor is a program that can help you display the Gcode file and show any angle of the object. It contains GcodeViewer and GcodeLoader. This project use Flask framework and Anaconda enviroment to build. 
-And here is the demo video link：
+Gcode-Object-Monitor is a program that can help you display the Gcode file and show any angle of the object. It contains GcodeViewer and GcodeLoader. This project is build by Flask framework. And you can use Docker enviroment to build up this project. 
+
+1. Clone this project.
+2. Type docker-compose up --build -d on docker cli.
+3. Open https://locahost:5000/ on the website.
+
+Here is the demo video link：
 https://youtu.be/EK8IJphP_RU
 
 
