@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>GCodeViewer</title>
+		
+		<script src="{{ url_for('static', filename='threegcode.js')}}"></script>
+		<script src="{{ url_for('static', filename='OrbitControls.js')}}"></script>
+		<script src="{{ url_for('static', filename='GCodeLoader.js')}}"></script>
+		<script src="{{ url_for('static', filename='OBJExporter.js')}}"></script>
+		<script src="{{ url_for('static', filename='jquery-3.3.1.js')}}"></script>
+
+
+		<meta http-equiv="Cache-control" content="no-cache">
+		<meta charset="utf-8">
+
+		
+		<style>
+			body {
+                /* set margin to 0 and overflow to hidden, to go fullscreen */
+                height: 100%;
+                padding: 0;
+                margin: 0;
+                overflow: hidden;
+			}
+			MyCamera{
+                width:15%;
+                height: 100%;
+                top: 0%;
+                background-color:rgb(243, 243, 243);
+                color:rgb(144, 72, 160); 
+                position: absolute;
+            }
+			#ControlRange {
+                /*the mouse detect*/
+                width: 85%;
+                height: 100%;
+                top: 0%;
+                left: 15%;
+                position: relative;
+            }
+			p { 
+                text-align:left;
+            }
+
+
+		</style>
+
+	</head>
+
+	<body>
+
+		<div id = "WebGL-output"></div>
+		<div style="position: absolute;" id="ControlRange"></div>
+		
+
+		<MyCamera>
+			<input type="file" id="upload"><br>
+
+			<h5>
+				<p>Whole Layer:</p>
+				<p id="wholeLayer"></p>
+				<p>Percentage:</p>
+				<p id="wholeLayer"></p>
+				<p id="Percentage"></p>
+				<p>
+					Current Layer:
+					<input type="number" id="inputLayer" style="width: 40%" value="300">
+					<button id="modifyLayer">ModifyLayer</button>
+					<button id="modifyBtn2">ModifyBtn2</button>
+					<button id="rotate">ROTATE</button>
+				</p>
+			</h5>
+			My X axis: <input type="number" id="inputX" style="width: 40%" value="150"><br>
+			My Y axis: <input type="number" id="inputY" style="width: 40%" value="150"><br>
+			My Z axis: <input type="number" id="inputZ" style="width: 40%" value="150"><br>
+			<button id="modifyBtn1">ModifyBtn1</button><br>
+			<h3>Camera Position</h3>
+			<h5>
+				<p>PositionX</p>
+				<p id = "PosX"></p>
+				<p>PositionY</p>
+				<p id = "PosY"></p>
+				<p>PositionZ</p>
+				<p id = "PosZ"></p>
+			</h5>
+		</MyCamera>
+
+		
+
+
+		<script type="text/javascript">
+
+			var buffer;
+			var gcodeArray = [];
+			var gcodeArrayBuffer = [];
+			
+			function init() {
+				var scene = new THREE.Scene();
+				var webGLRenderer = new THREE.WebGLRenderer();
+				var spotLight = new THREE.SpotLight(0xffffff);
+
+				/*GCodeLoader only use GCodeLoader.parse and GCodeLoader.objectViewer*/
+				var loader =  new THREE.GCodeLoader();
+				var Gcodeobject = new THREE.Group();
+				
+				/*create initial value of camera*/
+				var camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.1, 10000);
+				var cameraPosX = 150; 
+                var cameraPosY = 150;
+                var cameraPosZ = 150;
+                var my_x_axis, my_y_axis, my_z_axis;
+				var inputX, inputY, inputZ;
+				
+
+
+				axes = buildAxes( 1000 );
+				scene.add(axes);
+
+				/*  wholeLayer : all layer vertex
+					displayLayer : now display layer
+					inputLayer : want to change the layer to GcodeViewer */
+				var wholeLayer, displayLayer, inputLayer;
+
+				/* for function rotate_camera()*/
+				var radius = 200, angle = 0, rotate_frequency = 0; 
+
+
+                /*Let mouse can control the STL model movement*/
+                document.getElementById("ControlRange").addEventListener('mousewheel', onDocumentMouseWheel, false);
+                document.getElementById("ControlRange").addEventListener('mousemove', onDocumentMouseDown, false);
+                var controls = new THREE.OrbitControls(camera, document.getElementById("ControlRange"));
+				
+				document.getElementById("modifyLayer").addEventListener("click", modifyLayerFunction, false);
+				document.getElementById("modifyBtn1").addEventListener("click", modifyBtn1Function, false);
+				document.getElementById("modifyBtn2").addEventListener("click", modifyBtn2Function, false);
+				document.getElementById("rotate").addEventListener("click", rotate_camera, false);
+
+                // create a render and set the size
+                webGLRenderer.setClearColor(new THREE.Color(0xF3F3F3));
+                webGLRenderer.setSize(window.innerWidth, window.innerHeight);
+                webGLRenderer.shadowMapEnabled.set = true;
+
+                
+                // position and point the camera to the center of the scene
+                changeCameraPosition(cameraPosX, cameraPosY, cameraPosZ);
+                displayCameraPosition();
+
+                //the direction of camera lookat
+                camera.up.x = 0;
+                camera.up.y = 0;
+                camera.up.z = 1;
+                camera.lookAt({
+                    x:0,
+                    y:0,
+                    z:0
+                });
+
+                // add spotlight for the shadows
+                spotLight.position.set(150, 150, 150);
+                scene.add(spotLight);
+
+				
+                document.getElementById("WebGL-output").appendChild(webGLRenderer.domElement);
+				
+				var upl = document.getElementById('upload');
+				upl.addEventListener('change', GcodeArrayGet);
+				render();
+
+
+				function GcodeArrayGet(){
+					var file = this.files[0];
+					var reader = new FileReader();
+
+					reader.onloadend = callbackFunction;
+					reader.readAsText(file);
+				}
+
+
+				function callbackFunction(event) {
+					buffer = event.target.result;
+					gcodeArray = loader.parse(buffer);
+					gcodeArrayBuffer = gcodeArray;
+					wholeLayer = gcodeArray.length;
+					document.getElementById("wholeLayer").innerHTML = wholeLayer;
+					GcodeObjectViewer();
+				}
+
+
+				function GcodeObjectViewer(){
+					Gcodeobject = loader.objectViewer(gcodeArrayBuffer);
+			
+					/*change GcodeObject x-axis rotation value*/
+					Gcodeobject.rotation.x = 0;
+
+					/*change center from global world to local world*/
+					var bbox = new THREE.Box3().setFromObject( Gcodeobject ).getCenter( Gcodeobject.position ).multiplyScalar( - 1 );
+					
+					scene.add( Gcodeobject );
+
+					render();
+				}
+
+				function GcodeLayerDisplay(){
+					displayLayer = wholeLayer;
+					document.getElementById("CurrentLayer").innerHTML = displayLayer;
+				}
+
+
+				function modifyLayerFunction(event){
+					/*remove the gcode model*/
+					scene.remove(scene.children[2]);
+					inputLayer = document.getElementById("inputLayer").value;
+					
+					gcodeArrayBuffer = [];
+
+					for(var i = 0; i < inputLayer; i++){
+						gcodeArrayBuffer.push(gcodeArray[i]);
+					}
+					
+					GcodeObjectViewer();
+
+					/*display percentage of whole layer*/
+					document.getElementById("Percentage").innerHTML = ((inputLayer/wholeLayer) * 100).toFixed(2) + '%';
+
+				}
+
+				function modifyBtn1Function(event){
+                    inputX = document.getElementById("inputX").value;
+                    inputY = document.getElementById("inputY").value;
+                    inputZ = document.getElementById("inputZ").value;
+                    changeCameraPosition(inputX, inputY, inputZ);
+                    displayCameraPosition();
+					controls.update();
+					appendFileAndSubmit();
+				}
+
+				function modifyBtn2Function(event){
+					controls.update();
+					appendFileAndSubmit();
+				}
+
+
+
+				function rotate_camera(){
+					circule = false;
+					
+					while(circule == false){
+						cameraPosX = radius * Math.cos( angle );  
+						cameraPosY = radius * Math.sin( angle );
+						cameraPosZ = 0;
+						angle += 0.05;
+
+						changeCameraPosition(cameraPosX, cameraPosY, cameraPosZ);
+						displayCameraPosition();
+						controls.update();
+						appendFileAndSubmit(rotate_frequency);
+						
+						console.log('camera.position.x: ' + camera.position.x);
+						console.log('camera.position.y: ' + camera.position.y);
+						console.log('time: ' + rotate_frequency);
+						rotate_frequency = rotate_frequency + 1;
+						if(rotate_frequency > 200){
+							circule = true
+						}
+					}
+
+					$.ajax({
+						url: 'rotate',
+						type: 'GET',
+						dataType: 'json',
+						
+						success: function(data){
+							console.log(data);
+							changeCameraPosition(data.position_x, data.position_y, data.position_z);
+							displayCameraPosition();
+							controls.update();
+						}
+						
+					});
+					rotate_frequency = 0;
+				}
+
+
+
+				function appendFileAndSubmit(){
+					webGLRenderer.render(scene, camera);
+					var imageSrc = webGLRenderer.domElement.toDataURL('image/png', 1);
+					var block = imageSrc.split(";");
+					var contentType = block[0].split(":")[1];// In this case "image/gif"
+					var realData = block[1].split(",")[1];// In this case "iVBORw0KGg...."
+					var camera_position_data = [cameraPosX, cameraPosY, cameraPosZ];
+					
+					var imageData = {
+						"dataURL": realData,
+						"rotate_frequency": rotate_frequency,
+						"camera_position_x": cameraPosX,
+						"camera_position_y": cameraPosY,
+						"camera_position_z": cameraPosZ
+					};
+
+					$.ajax({
+						url: '/upload',
+						type: 'POST',
+						data: imageData,
+						success: function(result){
+							console.log('success');
+						},
+						error: function(result){
+							console.log('failed');
+						}
+					});
+				}
+
+				function changeCameraPosition(x, y, z){
+                    cameraPosX = x;
+                    cameraPosY = y;
+                    cameraPosZ = z;
+                    my_x_axis = x;
+                    my_y_axis = y;
+                    my_z_axis = z;
+                    camera.position.set(cameraPosX, cameraPosY, cameraPosZ);
+                }
+				
+
+				function displayCameraPosition(){
+                    document.getElementById("PosX").innerHTML = cameraPosX;
+                    document.getElementById("PosY").innerHTML = cameraPosY;
+                    document.getElementById("PosZ").innerHTML = cameraPosZ;
+                }
+
+                function getCameraPosition(){
+                    cameraPosX = camera.position.x;
+                    cameraPosY = camera.position.y;
+                    cameraPosZ = camera.position.z;
+                }
+
+				
+				function onDocumentMouseWheel(event){
+                    getCameraPosition();
+                    displayCameraPosition();
+                }
+
+                function onDocumentMouseDown(event){
+                    getCameraPosition();
+                    displayCameraPosition();
+				}
+			
+				function render(){
+					requestAnimationFrame( render );
+					webGLRenderer.render(scene, camera);
+					webGLRenderer.setSize(window.innerWidth, window.innerHeight);
+				}
+
+				function resize() {
+					camera.aspect = window.innerWidth / window.innerHeight;
+					camera.updateProjectionMatrix();
+					webGLRenderer.setSize( window.innerWidth, window.innerHeight );
+				}
+
+                /*build x, y, z axis*/
+                function buildAxis( src, dst, colorHex, dashed ) {
+                    var geom = new THREE.Geometry(),
+                        mat; 
+                    if(dashed) {
+                        mat = new THREE.LineDashedMaterial({ linewidth: 3, color: colorHex, dashSize: 0.5, gapSize: 0.5 });
+                    } else {
+                        mat = new THREE.LineBasicMaterial({ linewidth: 3, color: colorHex });
+                    }
+                    geom.vertices.push( src.clone() );
+                    geom.vertices.push( dst.clone() );
+                    geom.computeLineDistances(); // This one is SUPER important, otherwise dashed lines will appear as simple plain lines
+                    var axis = new THREE.Line( geom, mat, THREE.LinePieces );
+                    return axis;
+                }
+                
+                function buildAxes( length ) {
+                    var axes = new THREE.Object3D();
+                    axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( length, 0, 0 ), 0xFF0000, false ) ); // +X
+                    axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( -length, 0, 0 ), 0xFF0000, true) ); // -X
+                    axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, length, 0 ), 0x00FF00, false ) ); // +Y
+                    axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, -length, 0 ), 0x00FF00, true ) ); // -Y
+                    axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, 0, length ), 0xffff00, false ) ); // +Z
+                    axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, 0, -length ), 0xffff00, true ) ); // -Z
+                    return axes;
+				}
+				
+			}
+
+
+			window.onload = init;
+
+		</script>
+
+	</body>
+</html>

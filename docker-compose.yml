@@ -1,0 +1,13 @@
+version: '3.7'       # docker compose version
+
+services:
+  gcode-object-monitor:
+    volumes:
+      - static:/static
+    build:
+      context: .
+    ports:
+      - "5000:8888"
+
+volumes:
+  static:
