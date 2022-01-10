@@ -40,14 +40,17 @@
             var autoScreen;
             var day, hour, minute, second, millisec, time;
 
-            
-            
+
+
+
             navigator.mediaDevices.enumerateDevices().then(gotDevices).then(getStream).catch(handleError);
+            /*navigator.mediaDevices.getUserMedia().then(gotDevices).then(getStream).catch(handleError);*/
             videoSelect.onchange = getStream;
 
 
 
             function gotDevices(deviceInfos){
+                console.log('gotDevices');
                 for(var i = 0; i < deviceInfos.length; i ++){
                     var device = deviceInfos[i];
                     var option = document.createElement('option');
