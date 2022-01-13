@@ -20,4 +20,4 @@ In this project, you can
 
 ## Screenshot
 
-![demo image](Figures/demo image.png)
+![demo image](https://user-images.githubusercontent.com/32255697/149352220-5c809a8e-8b23-4fae-9580-0f16c34004e8.png)
